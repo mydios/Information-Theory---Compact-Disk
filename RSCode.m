@@ -52,6 +52,14 @@ classdef RSCode
             % -code: every row contains a GF(2^m) codeword corresponding to systematic Reed-Solomon coding of the corresponding information word            
             
             assert(size(msg,2) == obj.l);
+            code = gf(zeros(size(msg,1),obj.l+obj.n-obj.k),obj.m);
+            
+            %encode word for word using second method on pg 145
+            for i = 1:size(msg,1)
+                msg_ex = gf([msg(i,:) zeros(1,obj.n-obj.k)],obj.m); %*x^(n-k)
+                [~,rem] = deconv(msg_ex, obj.g); %divide by g(x)
+                code(i,:) = msg_ex - rem; %add remainder to dividend to obtain codeword
+            end
             
                         
         end
@@ -65,7 +73,8 @@ classdef RSCode
             % -decoded: every row contains a GF(2^m) information word corresponding to decoding of the corresponding Reed-Solomon codeword
             % -nERR: column vector containing the number of corrected symbols for every codeword, -1 if error correction failed
             
-            assert(size(msg,2) == obj.l+2*obj.t);
+            assert(size(code,2) == obj.l+2*obj.t);
+            
         end
     
     end
