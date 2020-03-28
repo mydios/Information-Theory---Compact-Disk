@@ -66,12 +66,9 @@ classdef RSCode
             % -nERR: column vector containing the number of corrected symbols for every codeword, -1 if error correction failed
             
             assert(size(msg,2) == obj.l+2*obj.t);
-        
-        
-        
+        end
+    
     end
-    
-    
     
     methods(Static)
         
@@ -83,6 +80,14 @@ classdef RSCode
             % -m0: determines first root of generator polynomial, positve integer >= 0
             % OUTPUT:
             % -generator: rowvector containing the GF(2^m) generator polynomial coefficients in order of descending powers
+            % generator = rsgenpoly(7,3);
+            alpha = gf(2,m);
+            gengf = 1;
+            for k = m0:(m0+2*t-1)
+                gengf = conv(gengf, [1 alpha.^k]);
+            end
+            generator = gengf.x;
+            
             
             
         end
