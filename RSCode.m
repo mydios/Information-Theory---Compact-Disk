@@ -74,7 +74,44 @@ classdef RSCode
             % -nERR: column vector containing the number of corrected symbols for every codeword, -1 if error correction failed
             
             assert(size(code,2) == obj.l+2*obj.t);
+            nERR = zeros(size(code, 1));
+            ext_code = gf(zeros(size(code,1), obj.n),obj.m);
+            four_code = gf(zeros(size(code, 1), obj.n), obj.m);
+            ext_code(:,(obj.n-obj.l-2*obj.t)+1:obj.n) = code;
+            alpha = gf(2,obj.m);
             
+            
+            aij = dftmtx(alpha);
+            for i = 1:size(code,1)
+                %fourier transform the codeword
+                four_code(i,:) = ext_code(i,:)*aij;
+                
+                %find syndrome polynome
+                S = zeros(1, 2*obj.t);
+                for j = 2*obj.t:1
+                    S(j) = polyval(ext_code(i,:),alpha.^j);
+                end
+            
+                %find Lambda
+                prevLambda = zeros(1, obj.n);
+                Lambda = [zeros(1, obj.n) 1];
+                prevOmega = zeros(1, obj.n);
+                prevOmega(obj.n-2*obj.t) = 1;
+                Omega = zeros(1, obj.n);
+                Omega(obj.n-2*obj.t1:obj.n)=S;
+                while(any(Omega(1:(obj.n-1-obj.t))))
+                    tempOmega = Omega;
+                    tempLambda = Lambda;
+                    [q, Omega] = deconv(prevOmega, Omega);
+                    Lambda = prevLambda + conv(q, Lambda);
+                    prevLambda = tempLambda;
+                    prevOmega = tempOmega;
+                end
+                
+                %find error locator polynomial
+                E = gf(zeros(1,obj.n),obj.m);
+                                
+            end
         end
     
     end
