@@ -58,7 +58,7 @@ classdef RSCode
             for i = 1:size(msg,1)
                 msg_ex = gf([msg(i,:) zeros(1,obj.n-obj.k)],obj.m); %*x^(n-k)
                 [~,rem] = deconv(msg_ex, obj.g); %divide by g(x)
-                code(i,:) = msg_ex - rem; %add remainder to dividend to obtain codeword
+                code(i,:) = msg_ex + rem; %add remainder to dividend to obtain codeword
             end
             
                         
@@ -74,43 +74,62 @@ classdef RSCode
             % -nERR: column vector containing the number of corrected symbols for every codeword, -1 if error correction failed
             
             assert(size(code,2) == obj.l+2*obj.t);
-            nERR = zeros(size(code, 1));
+            nERR = zeros(size(code, 1),1);
             ext_code = gf(zeros(size(code,1), obj.n),obj.m);
             four_code = gf(zeros(size(code, 1), obj.n), obj.m);
             ext_code(:,(obj.n-obj.l-2*obj.t)+1:obj.n) = code;
+            temp = ext_code.x;
             alpha = gf(2,obj.m);
             
             
             aij = dftmtx(alpha);
+            aijinv = dftmtx(1/alpha);
             for i = 1:size(code,1)
                 %fourier transform the codeword
                 four_code(i,:) = ext_code(i,:)*aij;
                 
-                %find syndrome polynome
-                S = zeros(1, 2*obj.t);
-                for j = 2*obj.t:1
-                    S(j) = polyval(ext_code(i,:),alpha.^j);
+                %find syndrome polynome             
+                S = polyval(gf(temp(i,:),obj.m),alpha.^(2*obj.t:-1:1));                
+                if(S == gf(zeros(1,2*obj.t),obj.m))
+                    nERR(i) = 0;
+                    continue;
                 end
-            
                 %find Lambda
-                prevLambda = zeros(1, obj.n);
-                Lambda = [zeros(1, obj.n) 1];
-                prevOmega = zeros(1, obj.n);
-                prevOmega(obj.n-2*obj.t) = 1;
-                Omega = zeros(1, obj.n);
-                Omega(obj.n-2*obj.t1:obj.n)=S;
-                while(any(Omega(1:(obj.n-1-obj.t))))
+                prevLambda = 0;
+                Lambda = 1;
+                prevOmega = zeros(1, 2*obj.t);
+                prevOmega(1) = 1;
+                Omega=S;
+                while(size(Omega,2)>=obj.t)
                     tempOmega = Omega;
                     tempLambda = Lambda;
                     [q, Omega] = deconv(prevOmega, Omega);
                     Lambda = prevLambda + conv(q, Lambda);
+                    Omega = Omega(find(Omega ~= 0,1,'first'):end);
                     prevLambda = tempLambda;
                     prevOmega = tempOmega;
                 end
+                %normalize
+                Omega = gf(Omega/Lambda(end), obj.m);
+                Lambda = gf(Lambda/Lambda(end), obj.m);
+                Lambda = Lambda(find(Lambda ~= 0,1,'first'):end);
+                if size(Lambda,2)-1 <= obj.t 
+                    nERR(i) = size(Lambda,2)-1;
+                else
+                    nERR(i) = -1;
+                    continue;
+                end
                 
-                %find error locator polynomial
+                %find error vector in fourier domain
                 E = gf(zeros(1,obj.n),obj.m);
-                                
+                E(end-nERR(i):end-1) = S(end-nERR(i)+1:end);
+                E(end) = (Lambda(end:-1:2)*(E(end-nERR(i):end-1).'))/Lambda(1); 
+                for j = (obj.n-nERR(1)-1):-1:1
+                    E(j) = (Lambda(1:end-1)*(E(j:j+nERR(i)-1).'))/Lambda(end);
+                end
+                
+                %inverse fourier transform
+                e = E*aijinv;
             end
         end
     
@@ -148,7 +167,7 @@ classdef RSCode
             msg = gf(randi([0,2^8-1],5,10),8); % Generate a random message of 5 information words
             
             code = rs.encode(msg); % Encode this message
-            
+            tempcode = code;
             % Introduce errors
             code(2,[3 18]) = code(2,[5 18])+1;
             code(3,8) = 0;
