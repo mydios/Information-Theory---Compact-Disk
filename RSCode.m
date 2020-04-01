@@ -97,17 +97,17 @@ classdef RSCode
                 %find Lambda
                 prevLambda = 0;
                 Lambda = 1;
-                prevOmega = zeros(1, 2*obj.t);
+                prevOmega = zeros(1, 2*obj.t+1);
                 prevOmega(1) = 1;
                 Omega=S;
                 while(size(Omega,2)>=obj.t)
-                    tempOmega = Omega;
-                    tempLambda = Lambda;
-                    [q, Omega] = deconv(prevOmega, Omega);
-                    Lambda = prevLambda + conv(q, Lambda);
-                    Omega = Omega(find(Omega ~= 0,1,'first'):end);
-                    prevLambda = tempLambda;
-                    prevOmega = tempOmega;
+                    [q, nextOmega] = deconv(prevOmega, Omega);
+                    c = conv(q, Lambda); 
+                    nextLambda = [zeros(1,max(length(c)-length(prevLambda),0)) prevLambda] - [zeros(1,max(length(prevLambda)-length(c),0)) c];
+                    prevLambda = Lambda;
+                    Lambda = nextLambda;
+                    prevOmega = Omega;
+                    Omega = nextOmega(find(nextOmega ~= 0,1,'first'):end);
                 end
                 %normalize
                 Omega = gf(Omega/Lambda(end), obj.m);
@@ -124,12 +124,14 @@ classdef RSCode
                 E = gf(zeros(1,obj.n),obj.m);
                 E(end-nERR(i):end-1) = S(end-nERR(i)+1:end);
                 E(end) = (Lambda(end:-1:2)*(E(end-nERR(i):end-1).'))/Lambda(1); 
-                for j = (obj.n-nERR(1)-1):-1:1
-                    E(j) = (Lambda(1:end-1)*(E(j:j+nERR(i)-1).'))/Lambda(end);
+                for j = (obj.n-nERR(i)-1):-1:1
+                    E(j) = (Lambda(1:end-1)*(E(j+1:j+nERR(i)).'))/Lambda(end);
                 end
                 
                 %inverse fourier transform
                 e = E*aijinv;
+                
+                
             end
         end
     
