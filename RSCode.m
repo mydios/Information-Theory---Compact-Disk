@@ -76,7 +76,9 @@ classdef RSCode
             assert(size(code,2) == obj.l+2*obj.t);
             nERR = zeros(size(code, 1),1);
             ext_code = gf(zeros(size(code,1), obj.n),obj.m);
+            corr_code = gf(zeros(size(code,1), obj.n),obj.m);
             four_code = gf(zeros(size(code, 1), obj.n), obj.m);
+            decoded = gf(zeros(size(code, 1), obj.l), obj.m);
             ext_code(:,(obj.n-obj.l-2*obj.t)+1:obj.n) = code;
             temp = ext_code.x;
             alpha = gf(2,obj.m);
@@ -92,6 +94,7 @@ classdef RSCode
                 S = polyval(gf(temp(i,:),obj.m),alpha.^(2*obj.t:-1:1));                
                 if(S == gf(zeros(1,2*obj.t),obj.m))
                     nERR(i) = 0;
+                    corr_code(i,:) = ext_code(i,:);
                     continue;
                 end
                 %find Lambda
@@ -100,12 +103,12 @@ classdef RSCode
                 prevOmega = zeros(1, 2*obj.t+1);
                 prevOmega(1) = 1;
                 Omega=S;
-                while(size(Omega,2)>=obj.t)
+                while(size(Omega,2) > obj.t)
                     [q, nextOmega] = deconv(prevOmega, Omega);
                     c = conv(q, Lambda); 
                     nextLambda = [zeros(1,max(length(c)-length(prevLambda),0)) prevLambda] - [zeros(1,max(length(prevLambda)-length(c),0)) c];
                     prevLambda = Lambda;
-                    Lambda = nextLambda;
+                    Lambda = nextLambda(find(nextLambda ~= 0,1,'first'):end);
                     prevOmega = Omega;
                     Omega = nextOmega(find(nextOmega ~= 0,1,'first'):end);
                 end
@@ -117,6 +120,7 @@ classdef RSCode
                     nERR(i) = size(Lambda,2)-1;
                 else
                     nERR(i) = -1;
+                    corr_code(i,:) = ext_code(i,:);
                     continue;
                 end
                 
@@ -125,14 +129,17 @@ classdef RSCode
                 E(end-nERR(i):end-1) = S(end-nERR(i)+1:end);
                 E(end) = (Lambda(end:-1:2)*(E(end-nERR(i):end-1).'))/Lambda(1); 
                 for j = (obj.n-nERR(i)-1):-1:1
-                    E(j) = (Lambda(1:end-1)*(E(j+1:j+nERR(i)).'))/Lambda(end);
+                    E(j) = (Lambda(end-1:-1:1)*(E(j+1:j+nERR(i)).'))/Lambda(end);
                 end
                 
                 %inverse fourier transform
                 e = E*aijinv;
                 
+                %correct codewords with e_hat
+                corr_code(i,:) = ext_code(i,:) - e;
                 
             end
+            decoded = corr_code(:,end-obj.l-2*obj.t+1:end-2*obj.t);
         end
     
     end
@@ -151,7 +158,7 @@ classdef RSCode
             alpha = gf(2,m);
             gengf = 1;
             for k = m0:(m0+2*t-1)
-                gengf = conv(gengf, [1 alpha.^k]);
+                gengf = conv(gengf, [1 -(alpha.^k)]);
             end
             generator = gengf.x;
             
