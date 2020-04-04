@@ -78,7 +78,6 @@ classdef RSCode
             ext_code = gf(zeros(size(code,1), obj.n),obj.m);
             corr_code = gf(zeros(size(code,1), obj.n),obj.m);
             four_code = gf(zeros(size(code, 1), obj.n), obj.m);
-            decoded = gf(zeros(size(code, 1), obj.l), obj.m);
             ext_code(:,(obj.n-obj.l-2*obj.t)+1:obj.n) = code;
             temp = ext_code.x;
             alpha = gf(2,obj.m);
@@ -103,7 +102,7 @@ classdef RSCode
                 prevOmega = zeros(1, 2*obj.t+1);
                 prevOmega(1) = 1;
                 Omega=S;
-                while(size(Omega,2) > obj.t)
+                while(size(Omega,2)-1 >= obj.t)
                     [q, nextOmega] = deconv(prevOmega, Omega);
                     c = conv(q, Lambda); 
                     nextLambda = [zeros(1,max(length(c)-length(prevLambda),0)) prevLambda] - [zeros(1,max(length(prevLambda)-length(c),0)) c];
