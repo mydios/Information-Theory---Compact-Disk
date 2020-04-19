@@ -89,7 +89,7 @@ classdef RSCode
                 %fourier transform the codeword
                 four_code(i,:) = ext_code(i,:)*aij;
                 
-                %find syndrome polynome             
+                %find syndrome polynome
                 S = polyval(gf(temp(i,:),obj.m),alpha.^(2*obj.t:-1:1));                
                 if(S == gf(zeros(1,2*obj.t),obj.m))
                     nERR(i) = 0;
@@ -97,23 +97,23 @@ classdef RSCode
                     continue;
                 end
                 %find Lambda
-                prevLambda = 0;
-                Lambda = 1;
-                prevOmega = zeros(1, 2*obj.t+1);
-                prevOmega(1) = 1;
+                prevLambda = gf(0,obj.m);
+                Lambda = gf(1, obj.m);
+                prevOmega = gf(zeros(1, 2*obj.t+1), obj.m);
+                prevOmega(1) = gf(1, obj.m);
                 Omega=S;
                 while(size(Omega,2)-1 >= obj.t)
                     [q, nextOmega] = deconv(prevOmega, Omega);
                     c = conv(q, Lambda); 
-                    nextLambda = [zeros(1,max(length(c)-length(prevLambda),0)) prevLambda] - [zeros(1,max(length(prevLambda)-length(c),0)) c];
+                    nextLambda = [gf(zeros(1,max(length(c)-length(prevLambda),0)), obj.m) prevLambda] - [gf(zeros(1,max(length(prevLambda)-length(c),0)), obj.m) c];
                     prevLambda = Lambda;
                     Lambda = nextLambda(find(nextLambda ~= 0,1,'first'):end);
                     prevOmega = Omega;
                     Omega = nextOmega(find(nextOmega ~= 0,1,'first'):end);
                 end
                 %normalize
-                Omega = gf(Omega/Lambda(end), obj.m);
-                Lambda = gf(Lambda/Lambda(end), obj.m);
+                Omega = Omega/Lambda(end);
+                Lambda = Lambda/Lambda(end);
                 Lambda = Lambda(find(Lambda ~= 0,1,'first'):end);
                 if size(Lambda,2)-1 <= obj.t 
                     nERR(i) = size(Lambda,2)-1;
@@ -125,8 +125,12 @@ classdef RSCode
                 
                 %find error vector in fourier domain
                 E = gf(zeros(1,obj.n),obj.m);
-                E(end-nERR(i):end-1) = S(end-nERR(i)+1:end);
-                E(end) = (Lambda(end:-1:2)*(E(end-nERR(i):end-1).'))/Lambda(1); 
+                nu = size(Lambda,2)-1;
+                E(end-nu+1-obj.m0:end-obj.m0) = S(end-nu+1:end);
+                for j = obj.n-obj.m0+1:obj.n
+                    E(j) = (Lambda(end:-1:2)*(E(end-nu-obj.m0+1:end-obj.m0).'))/Lambda(1); 
+                end
+                %E(end) = (Lambda(end:-1:2)*(E(end-nERR(i):end-1).'))/Lambda(1); 
                 for j = (obj.n-nERR(i)-1):-1:1
                     E(j) = (Lambda(end-1:-1:1)*(E(j+1:j+nERR(i)).'))/Lambda(end);
                 end
@@ -135,7 +139,7 @@ classdef RSCode
                 e = E*aijinv;
                 
                 %correct codewords with e_hat
-                corr_code(i,:) = ext_code(i,:) - e;
+                corr_code(i,:) = ext_code(i,:) + e;
                 
             end
             decoded = corr_code(:,end-obj.l-2*obj.t+1:end-2*obj.t);
