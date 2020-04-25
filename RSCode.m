@@ -86,11 +86,9 @@ classdef RSCode
             aij = dftmtx(alpha);
             aijinv = dftmtx(1/alpha);
             for i = 1:size(code,1)
-                %fourier transform the codeword
-                four_code(i,:) = ext_code(i,:)*aij;
                 
                 %find syndrome polynome
-                S = polyval(gf(temp(i,:),obj.m),alpha.^(2*obj.t:-1:1));                
+                S = polyval(gf(temp(i,:),obj.m),alpha.^(2*obj.t-1+obj.m0:-1:obj.m0));                
                 if(S == gf(zeros(1,2*obj.t),obj.m))
                     nERR(i) = 0;
                     corr_code(i,:) = ext_code(i,:);
@@ -124,22 +122,26 @@ classdef RSCode
                 end
                 
                 %find error vector in fourier domain
-                E = gf(zeros(1,obj.n),obj.m);
+                E = [gf(zeros(1,obj.n-obj.m0-2*obj.t),obj.m) S gf(zeros(1,obj.m0),obj.m)];
                 nu = size(Lambda,2)-1;
-                E(end-nu+1-obj.m0:end-obj.m0) = S(end-nu+1:end);
                 for j = obj.n-obj.m0+1:obj.n
-                    E(j) = (Lambda(end:-1:2)*(E(end-nu-obj.m0+1:end-obj.m0).'))/Lambda(1); 
+                    E(j) = E(j-nu:j-1)*Lambda(end:-1:2).'/Lambda(1); 
                 end
-                %E(end) = (Lambda(end:-1:2)*(E(end-nERR(i):end-1).'))/Lambda(1); 
-                for j = (obj.n-nERR(i)-1):-1:1
-                    E(j) = (Lambda(end-1:-1:1)*(E(j+1:j+nERR(i)).'))/Lambda(end);
+                for j = obj.n-obj.m0-length(S):-1:1
+                    E(j) = E(j+1:j+nu)*Lambda(end-1:-1:1).';                    
                 end
-                
+                      
                 %inverse fourier transform
-                e = E*aijinv;
+                e = fliplr(E)*aijinv;
+                e = fliplr(e);
                 
                 %correct codewords with e_hat
-                corr_code(i,:) = ext_code(i,:) + e;
+                if (e(1:end-obj.l-obj.n+obj.k) == gf(zeros(1,obj.k-obj.l),obj.m))
+                    corr_code(i,:) = ext_code(i,:) + e;
+                else
+                    corr_code(i,:) = ext_code(i,:);
+                    nERR(i) = -1;
+                end
                 
             end
             decoded = corr_code(:,end-obj.l-2*obj.t+1:end-2*obj.t);
