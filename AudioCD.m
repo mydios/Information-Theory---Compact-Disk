@@ -22,23 +22,23 @@ classdef AudioCD
         gpoly_8_parity; % Single RS code for configuration 3
         enc_8_parity;
         dec_8_parity;
-                
+        
         cd_bits; % Bits written to disk (before EFM)
         
         scaled_quantized_padded_original; % Reference to compare the output of readCD to
     end
     
     methods
-
-        function obj=AudioCD(Fs,configuration,max_interpolation)  
+        
+        function obj=AudioCD(Fs,configuration,max_interpolation)
             % Constructor of the AudioCD class
-			% INPUT:
+            % INPUT:
             % -Fs: The sample rate of the audio
             % -configuration: 0: no CIRC; 1: CIRC as described in standard; 2: Concatenated RS, no interleaving; 3: Single 32,24 RS
-			% -max_interpolation: The maximum number of interpolated audio samples
+            % -max_interpolation: The maximum number of interpolated audio samples
             % OUTPUT:
             % -obj: the AudioCD object
-
+            
             obj.Fs = Fs;
             obj.max_interpolation = max_interpolation;
             
@@ -47,15 +47,15 @@ classdef AudioCD
             if (configuration == 1) || (configuration == 2)
                 obj.gpoly2 = rsgenpoly(255,251,bi2de(fliplr(primpoly)),0);
                 obj.enc2 = comm.RSEncoder(255,251,obj.gpoly2,24,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);
-                obj.dec2 = comm.RSDecoder(255,251,obj.gpoly2,24,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly,'ErasuresInputPort',true);
-
+                obj.dec2 = comm.RSDecoder(255,251,obj.gpoly2,24,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);%,'ErasuresInputPort',true);
+                
                 obj.gpoly1 = rsgenpoly(255,251,bi2de(fliplr(primpoly)),0);
                 obj.enc1 = comm.RSEncoder(255,251,obj.gpoly1,28,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);
-                obj.dec1 = comm.RSDecoder(255,251,obj.gpoly1,28,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly,'ErasuresInputPort',true);
+                obj.dec1 = comm.RSDecoder(255,251,obj.gpoly1,28,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);%,'ErasuresInputPort',true);
             elseif configuration == 3
                 obj.gpoly_8_parity = rsgenpoly(255,247,bi2de(fliplr(primpoly)),0);
                 obj.enc_8_parity = comm.RSEncoder(255,247,obj.gpoly_8_parity,24,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);
-                obj.dec_8_parity = comm.RSDecoder(255,247,obj.gpoly_8_parity,24,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);           
+                obj.dec_8_parity = comm.RSDecoder(255,247,obj.gpoly_8_parity,24,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);
             end
             obj.configuration = configuration;
         end
@@ -66,16 +66,16 @@ classdef AudioCD
             % -obj: the AudioCD object
             % -audiofile: [Nsamples x 2] matrix containing the left and right audio track as samples of the double datatype
             % OUTPUT:
-            % -obj: the updated AudioCD object            
-
+            % -obj: the updated AudioCD object
+            
             assert(size(audiofile,2) == 2);
             
             xscaled = audiofile / max(max(abs(audiofile))); % normalize to -1:1
             x = uencode(xscaled,16); % convert to 16 bit signed values
-
+            
             xlr16 = reshape(x',[],1); % serialize left and right audio channel
             xlr8 = typecast(xlr16,'uint8'); % split into 8 bit words
-
+            
             xlr8_padded = [xlr8 ; zeros(24-(rem(numel(xlr8)-1,24)+1),1)]; % pad with zeros to fill an integer number of frames
             n_frames = numel(xlr8_padded)/24; % every frame contains 24 8 bit words
             
@@ -92,7 +92,7 @@ classdef AudioCD
                     [delay_unequal,n_frames] = obj.CIRC_enc_delay_unequal(C2_encoded,n_frames);
                     [C1_encoded,n_frames] = obj.CIRC_enc_C1(delay_unequal,n_frames);
                     [delay_inv,n_frames] = obj.CIRC_enc_delay_inv(C1_encoded,n_frames);
-                                        
+                    
                     xlrb = de2bi(delay_inv,8);
                 case 2 % Concatenated RS, no interleaving
                     [C2_encoded,n_frames] = obj.CIRC_enc_C2(xlr8_padded,n_frames);
@@ -109,7 +109,7 @@ classdef AudioCD
             
             xlrbserial = reshape(xlrb',[],1);
             
-            obj.cd_bits = logical(xlrbserial);            
+            obj.cd_bits = logical(xlrbserial);
         end
         
         function obj=bitErrorsCd(obj,p)
@@ -118,8 +118,8 @@ classdef AudioCD
             % -obj: the AudioCD object
             % -p: the bit error probability, i.e., an obj.cd_bits bit is flipped with probability p
             % OUTPUT:
-            % -obj: the updated AudioCD object            
-
+            % -obj: the updated AudioCD object
+            
             noise = rand(size(obj.cd_bits))<p;
             
             obj.cd_bits = xor(obj.cd_bits,noise);
@@ -132,7 +132,7 @@ classdef AudioCD
             % -length_scratch: the length of the scratch (in number of bit)
             % -location_scratch: the location of the scratch (in bit offset from start of obj.cd_bits)
             % OUTPUT:
-            % -obj: the updated AudioCD object            
+            % -obj: the updated AudioCD object
             
             obj.cd_bits(location_scratch:min(location_scratch+length_scratch-1,numel(obj.cd_bits))) = 0;
         end
@@ -142,10 +142,10 @@ classdef AudioCD
             % INPUT:
             % -obj: the AudioCD object, containing the data in obj.cd_bits
             % OUTPUT:
-            % -audio_out: [Nsamples x 2] matrix containing the left and right audio track as samples of the double datatype  
+            % -audio_out: [Nsamples x 2] matrix containing the left and right audio track as samples of the double datatype
             % -interpolation_flags: [Nsamples x 2] matrix containing a 0 where no erasure was flagged, a 1 where an erasure was interpolated and a -1
             % where interpolation failed
-
+            
             
             ylrb = reshape(obj.cd_bits,8,[])';
             ylr8 = bi2de(ylrb);
@@ -165,7 +165,7 @@ classdef AudioCD
                     [delay_unequal,erasure_flags,n_frames] = obj.CIRC_dec_delay_unequal(C1_decoded,erasure_flags,n_frames);
                     [C2_decoded,erasure_flags,n_frames] = obj.CIRC_dec_C2(delay_unequal,erasure_flags,n_frames);
                     [deinterleave_delay,erasure_flags,n_frames] = obj.CIRC_dec_deinterleave_delay(C2_decoded,erasure_flags,n_frames);
-                                        
+                    
                     ylr16 = typecast(uint8(deinterleave_delay),'uint16');
                     y = reshape(ylr16,2,[])';
                     
@@ -239,18 +239,61 @@ classdef AudioCD
             end
             
         end
-    
-        function [output,n_frames] = CIRC_enc_delay_interleave(obj,input,n_frames)
+        
+        function [output,n_frames] = CIRC_enc_delay_interleave(~,input,n_frames)
             % CIRC Encoder: Delay of 2 frames + interleaving sequence
             % INPUT:
             % -obj: the AudioCD object
             % -input: the input to this block of the CIRC encoder
             % -n_frames: the length of the input expressed in frames
             % OUTPUT:
-            % -output: the output of this block of the CIRC encoder  
+            % -output: the output of this block of the CIRC encoder
             % -n_frames: the length of the output expressed in frames (changed from input because of delay!)
-
-          
+            
+            % There are 24 symbols in each frame which make up 12 words.
+            % Each word can at max be delayed up to 2 frames.
+            % As there are n_frames in total, the words in the last frame
+            % can be put in the n_frames+2'th frame
+            % Initialize an array that can fit symbols of all the frames
+            output = zeros((n_frames+2)*24,1,'uint8');
+            
+            % add delay + do interleaving
+            for i=1:(n_frames)
+                
+                index = (i-1)*24;
+                delayedIndex = (i+1)*24;
+                
+                % Retrieve the corresponding frame from the input
+                frame = input((i-1)*24+1:i*24);
+                
+                % All of the even words get delayed by 2 frames and put at
+                % the start of the frame
+                output(delayedIndex + 1 :delayedIndex+2) = frame(1:2); %L6n+0
+                output(delayedIndex + 3:delayedIndex+4) = frame(9:10); %L6n+2
+                output(delayedIndex + 5:delayedIndex+6) = frame(17:18); %L6n+4
+                
+                output(delayedIndex + 7:delayedIndex+8) = frame(3:4); %R6n+0
+                output(delayedIndex + 9:delayedIndex+10) = frame(11:12); %R6n+2
+                output(delayedIndex + 11:delayedIndex+12) = frame(19:20); %R6n+4
+                
+                
+                % The uneven words are not delayed but the left and right
+                % channel also do get split and put at the bottom of the
+                % frame
+                output(index + 13:index+14) = frame(5:6); %L6n+1
+                output(index + 15:index+16) = frame(13:14); %L6n+3
+                output(index + 17:index+18) = frame(21:22); %L6n+5
+                
+                output(index + 19:index+20) = frame(7:8); %R6n+1
+                output(index + 21:index+22) = frame(15:16); %R6n+3
+                output(index + 23:index+24) = frame(23:24); %R6n+5
+                
+            end
+            
+            % Increase the total number of frames to account for the new
+            % frames
+            n_frames = n_frames + 2;
+            
         end
         
         function [output,n_frames] = CIRC_enc_C2(obj,input,n_frames)
@@ -260,23 +303,50 @@ classdef AudioCD
             % -input: the input to this block of the CIRC encoder
             % -n_frames: the length of the input expressed in frames
             % OUTPUT:
-            % -output: the output of this block of the CIRC encoder  
+            % -output: the output of this block of the CIRC encoder
             % -n_frames: the length of the output expressed in frames
             
-
+            % Prepare the output of this block for 28 symbols. 4 parity
+            % symbols get added in this step.
+            output = zeros(n_frames*28,1,'uint8');
+            for i = 1:n_frames
+                % Select the frame
+                frame = input((i-1)*24+1:i*24);
+                index = (i-1)*28;
+                
+                % Encode the selected frame
+                encoded = step(obj.enc2,frame);
+                
+                output(index+1:index+12) = encoded(1:12);
+                % Place the 4 parity symbols in the middle of the frame
+                output(index+13:index+16) = encoded(25:28);
+                output(index+17:index+28) = encoded(13:24);
+            end
         end
         
-        function [output,n_frames] = CIRC_enc_delay_unequal(obj,input,n_frames)
+        function [output,n_frames] = CIRC_enc_delay_unequal(~,input,n_frames)
             % CIRC Encoder: Delay lines of unequal length
             % INPUT:
             % -obj: the AudioCD object
             % -input: the input to this block of the CIRC encoder
             % -n_frames: the length of the input expressed in frames
             % OUTPUT:
-            % -output: the output of this block of the CIRC encoder  
+            % -output: the output of this block of the CIRC encoder
             % -n_frames: the length of the output expressed in frames (changed from input because of delay!)
             
-
+            % Prepare output buffer with additional frames
+            output = zeros((n_frames+27*4)*28,1,'uint8');
+            
+            % The first symbol does not get delayed so only 27 symbols need
+            % to be adjusted
+            for i=1:n_frames
+                for j=0:27
+                    % Map the input frame on the corresponding delayed output
+                    % frame
+                    output((i-1+j*4)*28+j+1) = input((i-1)*28+j+1);
+                end
+            end
+            n_frames = n_frames + 27*4;
         end
         
         function [output,n_frames] = CIRC_enc_C1(obj,input,n_frames)
@@ -286,38 +356,105 @@ classdef AudioCD
             % -input: the input to this block of the CIRC encoder
             % -n_frames: the length of the input expressed in frames
             % OUTPUT:
-            % -output: the output of this block of the CIRC encoder  
+            % -output: the output of this block of the CIRC encoder
             % -n_frames: the length of the output expressed in frames
             
-
+            % Input are 28 symbols / frame, output is 32 symbols / frame
+            output = zeros(n_frames*32,1,'uint8');
+            
+            for i = 1:n_frames
+                output((i-1)*32+1:i*32) = step(obj.enc1,input((i-1)*28+1:i*28));
+                % No need to correct here like in C2 as the parity bits
+                % already get put at the bottom of the frame
+            end
         end
         
-        function [output,n_frames] = CIRC_enc_delay_inv(obj,input,n_frames)
+        function [output,n_frames] = CIRC_enc_delay_inv(~,input,n_frames)
             % CIRC Encoder: Delay of 1 frame + inversions
             % INPUT:
             % -obj: the AudioCD object
             % -input: the input to this block of the CIRC encoder
             % -n_frames: the length of the input expressed in frames
             % OUTPUT:
-            % -output: the output of this block of the CIRC encoder  
+            % -output: the output of this block of the CIRC encoder
             % -n_frames: the length of the output expressed in frames (changed from input because of delay!)
             
-
+            % The output will grow by one frame as the last symbol will be
+            % delayed with 1 frame
+            output = zeros((n_frames+1)*32,1,'uint8');
+            
+            for i=1:n_frames
+                for j=1:32
+                    
+                    % All even symbols will be delayed with 1 frame
+                    if mod(j,2) == 1
+                        output(i*32+j) = input((i-1)*32+j);
+                        
+                        % The middle 4 symbols up until 28 and last 4
+                        % symbols need to be inverted
+                        if (j >= 13 && j <= 16) || j>=29
+                            output(i*32+j) = bitcmp(output(i*32+j),'uint8');
+                        end
+                    else
+                        output((i-1)*32+j) = input((i-1)*32+j);
+                        
+                        if (j >= 13 && j <= 16) || j>=29
+                            output((i-1)*32+j) = bitcmp(output((i-1)*32+j),'uint8');
+                        end
+                    end
+                end
+            end
+            n_frames = n_frames + 1;
+            
         end
         
-        function [output,n_frames] = CIRC_dec_delay_inv(obj,input,n_frames)
+        function [output,n_frames] = CIRC_dec_delay_inv(~,input,n_frames)
             % CIRC Decoder: Delay of 1 frame + inversions
             % INPUT:
             % -obj: the AudioCD object
             % -input: the input to this block of the CIRC decoder
             % -n_frames: the length of the input expressed in frames
             % OUTPUT:
-            % -output: the output of this block of the CIRC decoder  
+            % -output: the output of this block of the CIRC decoder
             % -n_frames: the length of the output expressed in frames (changed from input because of delay!)
             
             % Note: remove empty frames such that obj.CIRC_dec_delay_inv(obj.CIRC_enc_delay_inv(x)) == x!
-
-
+            
+            % Perform the reverse of the enc
+            % Just like in the enc version, a 1 frame delay is performed
+            % but now on the uneven symbols. This again adds a extra frame
+            output = zeros((n_frames+1)*32,1,'uint8');
+            
+            for i=1:n_frames
+                for j=1:32
+                    
+                    % All uneven symbols will be delayed with 1 frame
+                    if mod(j,2) == 0
+                        output(i*32+j) = input((i-1)*32+j);
+                        
+                        % The middle 4 symbols up until 28 and last 4
+                        % symbols need to be inverted
+                        if (j >= 13 && j <= 16) || j>=29
+                            output(i*32+j) = bitcmp(output(i*32+j),'uint8');
+                        end
+                    else
+                        output((i-1)*32+j) = input((i-1)*32+j);
+                        
+                        if (j >= 13 && j <= 16) || j>=29
+                            output((i-1)*32+j) = bitcmp(output((i-1)*32+j),'uint8');
+                        end
+                    end
+                end
+            end
+            
+            % As all symbols in all frames have now been delayed by 1
+            % frame, the first frame is empty, so we remove it
+            % Because the last frame's uneven symbols are empty and being
+            % delayed into a new frame, the newly created new frame is also
+            % empty and needs to be removed
+            output = output(33:(n_frames)*32);
+            n_frames = n_frames - 1;
+            
         end
         
         
@@ -328,15 +465,32 @@ classdef AudioCD
             % -input: the input to this block of the CIRC decoder
             % -n_frames: the length of the input expressed in frames
             % OUTPUT:
-            % -output: the output of this block of the CIRC decoder  
+            % -output: the output of this block of the CIRC decoder
             % -erasure_flags_out: the erasure flags at the output of this block, follow the decoding algorithm from the assignment
             % -n_frames: the length of the output expressed in frames
-
-
+            
+            % The decoder will take away the 4 parity symbols leaving an
+            % output of 28 symbols per frame
+            output = zeros(n_frames*28,1,'uint8');
+            
+            % This will hold booleans for each symbol in all frames
+            erasure_flags_out = zeros(n_frames*28,1,'logical');
+            
+            for i = 1:n_frames
+                
+                [dec_out,error] = step(obj.dec1,input((i-1)*32+1:i*32));%, zeros(32,1,'logical'));
+                
+                % Adjust the flag for the symbol when erasure is detected
+                % This is according to algorithm 1 in the assignment
+                output((i-1)*28+1:i*28) = dec_out;
+                if ~(error == 0 || error == 1)
+                    erasure_flags_out((i-1)*28+1:i*28) = 1;
+                end
+            end
         end
-
         
-        function [output,erasure_flags_out,n_frames] = CIRC_dec_delay_unequal(obj,input,erasure_flags_in,n_frames)
+        
+        function [output,erasure_flags_out,n_frames] = CIRC_dec_delay_unequal(~,input,erasure_flags_in,n_frames)
             % CIRC Decoder: Delay lines of unequal length
             % INPUT:
             % -obj: the AudioCD object
@@ -344,33 +498,115 @@ classdef AudioCD
             % -erasure_flags_in: the erasure flags at the input of this block of the CIRC decoder
             % -n_frames: the length of the input expressed in frames
             % OUTPUT:
-            % -output: the output of this block of the CIRC decoder  
+            % -output: the output of this block of the CIRC decoder
             % -erasure_flags_out: the erasure flags at the output of this block (eraure flags follow same interleaving as the data)
             % -n_frames: the length of the output expressed in frames
             
             % Note: remove empty frames such that obj.CIRC_dec_delay_unequal(obj.CIRC_enc_delay_unequal(x)) == x!
             
-
+            
+            % Similarly to the encoder, the symbols get delayed with
+            % unequal delay. Now the first symbol gets the largest delay
+            % whilst the last symbol gets no delay
+            
+            % The first symbol of the last frame will be delayed with 27
+            % frames so we need to extend the output again.
+            output = zeros((n_frames+27*4)*28,1,'uint8');
+            % We need to make out erasures buffer correspond to the output
+            erasure_flags_out = zeros((n_frames+27*4)*28,1,'logical');
+            
+            
+            for i=1:n_frames
+                % Traverse symbols in each frame in reverse order to gain
+                % easy access to the corresponding delay
+                for j=27:-1:0
+                    output((i-1+j*4)*28+28-j) = input((i-1)*28+28-j);
+                    erasure_flags_out((i-1+j*4)*28+28-j) = erasure_flags_in((i-1)*28+28-j);
+                end
+            end
+            
+            % All of the symbols should now have been delayed with 27*4
+            % frames which means the first 27*4 symbols are now empty and
+            % can be removed
+            output = output(27*4*28+1:(n_frames)*28);
+            
+            % Do the same operation on the erasure flags buffer
+            erasure_flags_out = erasure_flags_out(27*4*28+1:(n_frames)*28);
+            
+            % Adjust the total number of frames
+            n_frames = n_frames - 27*4;
+            
         end
-
+        
         
         function [output,erasure_flags_out,n_frames] = CIRC_dec_C2(obj,input,erasure_flags_in,n_frames)
             % CIRC Decoder: C2 decoder
             % INPUT:
             % -obj: the AudioCD object
             % -input: the input to this block of the CIRC decoder
-            % -erasure_flags_in: the erasure flags at the input of this block of the CIRC decoder            
+            % -erasure_flags_in: the erasure flags at the input of this block of the CIRC decoder
             % -n_frames: the length of the input expressed in frames
             % OUTPUT:
-            % -output: the output of this block of the CIRC decoder  
+            % -output: the output of this block of the CIRC decoder
             % -erasure_flags_out: the erasure flags at the output of this block, follow the decoding algorithm from the assignment
             % -n_frames: the length of the output expressed in frames
             
-        
+            % prepare output and erasure flag buffers for use
+            output = zeros(n_frames*24,1,'uint8');
+            erasure_flags_out = zeros(n_frames*24,1,'logical');
+            
+            
+            for i=1:n_frames
+                
+                % The parity symbols should now be in the middle of the
+                % frame, to be able to decode we need to put them at the
+                % end of the frame again.
+                frame = zeros(28,1,'uint8');
+                
+                frame(1:12) = input((i-1)*28+1:(i-1)*28+12);
+                frame(13:24) = input((i-1)*28+17:i*28);
+                frame(25:28) = input((i-1)*28+13:(i-1)*28+16);
+                
+                % Do the same for the erasure buffers frame
+                erasure_frame = zeros(28,1,'logical');
+                
+                erasure_frame(1:12) = erasure_flags_in((i-1)*28+1:(i-1)*28+12);
+                erasure_frame(13:24) = erasure_flags_in((i-1)*28+17:i*28);
+                erasure_frame(25:28) = erasure_flags_in((i-1)*28+13:(i-1)*28+16);
+                
+                % The decoder will strip the 4 parity bits and try to
+                % correct errors. The output frame will be 24 symbols in
+                % size
+                [dec_out, error] = step(obj.dec2,frame);%,erasure_frame);
+                
+                % Perform the C2 decoding according to the algorithm
+                % specified in the assignment
+                % The amount of erasure flags at the input of c2
+                erasure_count = sum(erasure_frame(:)==1);
+                if error == 0 || error == 1
+                    output((i-1)*24+1:i*24) = dec_out;
+                else
+                    if  erasure_count > 2
+                        % probably not needed but maybe better result
+                        output((i-1)*24+1:i*24) = frame(1:24);
+                        % Copy over the erasure flags from the input
+                        erasure_flags_out((i-1)*24+1:i*24) = erasure_frame(1:24);
+                    elseif erasure_count == 2 && error ~= -1
+                        output((i-1)*24+1:i*24) = dec_out;
+                    else
+                        output((i-1)*24+1:i*24) = dec_out;
+                        % Set all erasure flags to 1 for the current frame
+                        erasure_flags_out((i-1)*24+1:i*24) = 1;
+                    end
+                end
+                
+            end
+            
+            
         end
         
         
-        function [output,erasure_flags_out,n_frames] = CIRC_dec_deinterleave_delay(obj,input,erasure_flags_in,n_frames)
+        function [output,erasure_flags_out,n_frames] = CIRC_dec_deinterleave_delay(~,input,erasure_flags_in,n_frames)
             % CIRC Decoder: De-interleaving sequence + delay of 2 frames
             % INPUT:
             % -obj: the AudioCD object
@@ -378,12 +614,73 @@ classdef AudioCD
             % -erasure_flags_in: the erasure flags at the input of this block of the CIRC decoder
             % -n_frames: the length of the input expressed in frames
             % OUTPUT:
-            % -output: the output of this block of the CIRC decoder  
+            % -output: the output of this block of the CIRC decoder
             % -erasure_flags_out: the erasure flags at the output of this block (eraure flags follow same interleaving as the data)
             % -n_frames: the length of the output expressed in frames
             
             % Note: remove empty frames such that obj.CIRC_dec_deinterleave_delay(obj.CIRC_enc_delay_interleave(x)) == x!
             
+            % Prepare buffers with 2 extra frames
+            output = zeros((n_frames+2)*24,1,'uint8');
+            erasure_flags_out = zeros((n_frames+2)*24,1,'logical');
+            
+            % add delay + do interleaving
+            for i=1:(n_frames)
+                
+                index = (i-1)*24;
+                delayedIndex = (i+1)*24;
+                
+                frame = input((i-1)*24+1:i*24);
+                erasure_frame = erasure_flags_in((i-1)*24+1:i*24);
+                
+                % Now the uneven words need to get delayed by 2
+                
+                output(index+1:index+2) = frame(1:2); %L6n+0
+                erasure_flags_out(index+1:index+2) = erasure_frame(1:2);
+                
+                output(index+3:index+4) = frame(7:8); %R6n+0
+                erasure_flags_out(index+3:index+4) = erasure_frame(7:8);
+                
+                output(delayedIndex+5:delayedIndex+6) = frame(13:14); %L6n+1
+                erasure_flags_out(delayedIndex+5:delayedIndex+6) = erasure_frame(13:14);
+                
+                output(delayedIndex+7:delayedIndex+8) = frame(19:20); %R6n+1
+                erasure_flags_out(delayedIndex+7:delayedIndex+8) = erasure_frame(19:20);
+                
+                output(index+9:index+10) = frame(3:4); %L6n+2
+                erasure_flags_out(index+9:index+10) = erasure_frame(3:4);
+                
+                output(index+11:index+12) = frame(9:10); %R6n+2
+                erasure_flags_out(index+11:index+12) = erasure_frame(9:10);
+                
+                
+                
+                output(delayedIndex+13:delayedIndex+14) = frame(15:16); %L6n+3
+                erasure_flags_out(delayedIndex+13:delayedIndex+14) = erasure_frame(15:16);
+                
+                output(delayedIndex+15:delayedIndex+16) = frame(21:22); %R6n+3
+                erasure_flags_out(delayedIndex+15:delayedIndex+16) = erasure_frame(21:22);
+                
+                output(index+17:index+18) = frame(5:6); %L6n+4
+                erasure_flags_out(index+17:index+18) = erasure_frame(5:6);
+                
+                output(index+19:index+20) = frame(11:12); %R6n+4
+                erasure_flags_out(index+19:index+20) = erasure_frame(11:12);
+                
+                output(delayedIndex+21:delayedIndex+22) = frame(17:18); %L6n+5
+                erasure_flags_out(delayedIndex+21:delayedIndex+22) = erasure_frame(17:18);
+                
+                output(delayedIndex+23:delayedIndex+24) = frame(23:24); %R6n+5
+                erasure_flags_out(delayedIndex+23:delayedIndex+24) = erasure_frame(23:24);
+                
+            end
+            
+            % Remove empty first and last 2 empty frames because they are
+            % empty
+            output = output(2*24+1 : n_frames*24);
+            erasure_flags_out = erasure_flags_out(2*24+1 : n_frames*24);
+            % Update the total number of frames
+            n_frames = n_frames - 2;
             
         end
         
@@ -413,7 +710,7 @@ classdef AudioCD
             % -output: the output of this block
             % -erasure_flags_out: the erasure flags at the output of this block
             % -n_frames: the length of the output expressed in frames
-
+            
             output = zeros(n_frames*24,1,'uint8');
             erasure_flags_out = zeros(n_frames*24,1,'logical');
             for i = 1:n_frames
@@ -437,8 +734,8 @@ classdef AudioCD
             % OUTPUT:
             % -output: linear interpolation of the input where there are no more than obj.max_interpolation consecutive erasures
             % -interpolation_failed: equal to one at the samples where interpolation failed
-
-			% Make sure first and last sample are defined. If erasure: set to 0 (corresponds to the unsigned integer 2^15)
+            
+            % Make sure first and last sample are defined. If erasure: set to 0 (corresponds to the unsigned integer 2^15)
             if erasure_flags_in(1) ~= 0
                 erasure_flags_in(1) = 0;
                 input(1) = 2^15;
@@ -458,8 +755,8 @@ classdef AudioCD
                 output(i:i+erasure_burst(i)-1) = uint16(round(double(output(i-1))+(1:erasure_burst(i))*(double(output(i+erasure_burst(i)))-double(output(i-1)))/(erasure_burst(i)+1)));
                 interpolation_failed(i:i+erasure_burst(i)-1) = 0;
             end
-
-
+            
+            
         end
         
     end
@@ -468,13 +765,12 @@ classdef AudioCD
         function test()
             % Test the Matlab code of this class
             
-%             audio_file = audioread('Hallelujah.wav');
-%             Fs = 44.1e3;
+            audio_file = audioread('Hallelujah.wav');
+            Fs = 44.1e3;
             
-            audio_file = audioread('Hallelujah_22050.wav');
-            Fs = 22.05e3;
-
-
+            %audio_file = audioread('Hallelujah_22050.wav');
+            %Fs = 22.05e3;
+            
             cd = AudioCD(Fs,1,8);
             tic
             cd = cd.writeCd(audio_file);
@@ -488,12 +784,12 @@ classdef AudioCD
             tic
             [out,interpolation_flags] = cd.readCd();
             toc
-
+            
             fprintf('Number samples with erasure flags: %d\n',sum(sum(interpolation_flags~=0)));
             fprintf('Number samples with failed interpolations: %d\n',sum(sum(interpolation_flags==-1)));
             fprintf('Number undetected errors: %d\n',sum(sum(out(interpolation_flags==0) ~= cd.scaled_quantized_padded_original(interpolation_flags==0))));
-
-            sound(out,Fs);            
+            
+            sound(out,Fs);
             
         end
         
