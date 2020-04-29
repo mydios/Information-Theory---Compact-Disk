@@ -258,35 +258,35 @@ classdef AudioCD
             output = zeros((n_frames+2)*24,1,'uint8');
             
             % add delay + do interleaving
-            for i=1:(n_frames)
+            for i=0:n_frames-1
                 
-                index = (i-1)*24;
-                delayedIndex = (i+1)*24;
+                frame_index = (i)*24;
+                delayed_frame_index = (i+2)*24;
                 
                 % Retrieve the corresponding frame from the input
-                frame = input((i-1)*24+1:i*24);
+                frame = input(frame_index + 1:frame_index + 24);
                 
                 % All of the even words get delayed by 2 frames and put at
                 % the start of the frame
-                output(delayedIndex + 1 :delayedIndex+2) = frame(1:2); %L6n+0
-                output(delayedIndex + 3:delayedIndex+4) = frame(9:10); %L6n+2
-                output(delayedIndex + 5:delayedIndex+6) = frame(17:18); %L6n+4
+                output(delayed_frame_index + 1 :delayed_frame_index+2) = frame(1:2); %L6n+0
+                output(delayed_frame_index + 3:delayed_frame_index+4) = frame(9:10); %L6n+2
+                output(delayed_frame_index + 5:delayed_frame_index+6) = frame(17:18); %L6n+4
                 
-                output(delayedIndex + 7:delayedIndex+8) = frame(3:4); %R6n+0
-                output(delayedIndex + 9:delayedIndex+10) = frame(11:12); %R6n+2
-                output(delayedIndex + 11:delayedIndex+12) = frame(19:20); %R6n+4
+                output(delayed_frame_index + 7:delayed_frame_index+8) = frame(3:4); %R6n+0
+                output(delayed_frame_index + 9:delayed_frame_index+10) = frame(11:12); %R6n+2
+                output(delayed_frame_index + 11:delayed_frame_index+12) = frame(19:20); %R6n+4
                 
                 
                 % The uneven words are not delayed but the left and right
                 % channel also do get split and put at the bottom of the
                 % frame
-                output(index + 13:index+14) = frame(5:6); %L6n+1
-                output(index + 15:index+16) = frame(13:14); %L6n+3
-                output(index + 17:index+18) = frame(21:22); %L6n+5
+                output(frame_index + 13:frame_index+14) = frame(5:6); %L6n+1
+                output(frame_index + 15:frame_index+16) = frame(13:14); %L6n+3
+                output(frame_index + 17:frame_index+18) = frame(21:22); %L6n+5
                 
-                output(index + 19:index+20) = frame(7:8); %R6n+1
-                output(index + 21:index+22) = frame(15:16); %R6n+3
-                output(index + 23:index+24) = frame(23:24); %R6n+5
+                output(frame_index + 19:frame_index+20) = frame(7:8); %R6n+1
+                output(frame_index + 21:frame_index+22) = frame(15:16); %R6n+3
+                output(frame_index + 23:frame_index+24) = frame(23:24); %R6n+5
                 
             end
             
@@ -309,18 +309,24 @@ classdef AudioCD
             % Prepare the output of this block for 28 symbols. 4 parity
             % symbols get added in this step.
             output = zeros(n_frames*28,1,'uint8');
-            for i = 1:n_frames
+            
+            for i = 0:n_frames-1
+                
+                frame_index = i*24;
+                new_frame_index = i*28;
+                
                 % Select the frame
-                frame = input((i-1)*24+1:i*24);
-                index = (i-1)*28;
+                frame = input(frame_index+1:frame_index+24);
                 
                 % Encode the selected frame
-                encoded = step(obj.enc2,frame);
+                enc_out = step(obj.enc2,frame);
                 
-                output(index+1:index+12) = encoded(1:12);
                 % Place the 4 parity symbols in the middle of the frame
-                output(index+13:index+16) = encoded(25:28);
-                output(index+17:index+28) = encoded(13:24);
+                % The encoder, by default, places these at the end of the
+                % frame.
+                output(new_frame_index+1:new_frame_index+12) = enc_out(1:12);
+                output(new_frame_index+13:new_frame_index+16) = enc_out(25:28);
+                output(new_frame_index+17:new_frame_index+28) = enc_out(13:24);
             end
         end
         
@@ -339,11 +345,18 @@ classdef AudioCD
             
             % The first symbol does not get delayed so only 27 symbols need
             % to be adjusted
-            for i=1:n_frames
+            for i=0:n_frames-1
+                
+                frame_index = i*28;
+                
                 for j=0:27
+                    
+                    delay = j*4*28;
+                    symbol_index = j+1;
+                    
                     % Map the input frame on the corresponding delayed output
                     % frame
-                    output((i-1+j*4)*28+j+1) = input((i-1)*28+j+1);
+                    output(frame_index + delay + symbol_index) = input(frame_index + symbol_index);
                 end
             end
             n_frames = n_frames + 27*4;
@@ -362,8 +375,12 @@ classdef AudioCD
             % Input are 28 symbols / frame, output is 32 symbols / frame
             output = zeros(n_frames*32,1,'uint8');
             
-            for i = 1:n_frames
-                output((i-1)*32+1:i*32) = step(obj.enc1,input((i-1)*28+1:i*28));
+            for i = 0:n_frames-1
+                
+                frame_index = i*28;
+                new_frame_index = i*32;
+                
+                output(new_frame_index + 1 : new_frame_index + 32) = step(obj.enc1,input(frame_index + 1 : frame_index + 28));
                 % No need to correct here like in C2 as the parity bits
                 % already get put at the bottom of the frame
             end
@@ -383,27 +400,32 @@ classdef AudioCD
             % delayed with 1 frame
             output = zeros((n_frames+1)*32,1,'uint8');
             
-            for i=1:n_frames
-                for j=1:32
+            for i=0:n_frames-1
+                
+                frame_index = i*32;
+                delayed_frame_index = (i+1)*32;
+                
+                for j=0:31
                     
-                    % All even symbols will be delayed with 1 frame
-                    if mod(j,2) == 1
-                        output(i*32+j) = input((i-1)*32+j);
-                        
-                        % The middle 4 symbols up until 28 and last 4
-                        % symbols need to be inverted
-                        if (j >= 13 && j <= 16) || j>=29
-                            output(i*32+j) = bitcmp(output(i*32+j),'uint8');
-                        end
-                    else
-                        output((i-1)*32+j) = input((i-1)*32+j);
-                        
-                        if (j >= 13 && j <= 16) || j>=29
-                            output((i-1)*32+j) = bitcmp(output((i-1)*32+j),'uint8');
-                        end
+                    symbol_index = j + 1;
+                    index = frame_index; % frame_index by default
+                    
+                    % Use delayed index on even frames
+                    if mod(j,2) == 0
+                        index = delayed_frame_index;
                     end
+  
+                    output(index+symbol_index) = input(frame_index+symbol_index);
+                        
+                    % The middle 4 symbols up until 28 and last 4
+                    % symbols need to be inverted
+                    if (j >= 12 && j <= 15) || j>=28
+                        output(index+symbol_index) = bitcmp(output(index+symbol_index),'uint8');
+                    end    
+
                 end
             end
+            
             n_frames = n_frames + 1;
             
         end
@@ -425,25 +447,29 @@ classdef AudioCD
             % but now on the uneven symbols. This again adds a extra frame
             output = zeros((n_frames+1)*32,1,'uint8');
             
-            for i=1:n_frames
-                for j=1:32
+            for i=0:n_frames-1
+                
+                frame_index = i*32;
+                delayed_frame_index = (i+1)*32;
+                
+                for j=0:31
                     
-                    % All uneven symbols will be delayed with 1 frame
-                    if mod(j,2) == 0
-                        output(i*32+j) = input((i-1)*32+j);
-                        
-                        % The middle 4 symbols up until 28 and last 4
-                        % symbols need to be inverted
-                        if (j >= 13 && j <= 16) || j>=29
-                            output(i*32+j) = bitcmp(output(i*32+j),'uint8');
-                        end
-                    else
-                        output((i-1)*32+j) = input((i-1)*32+j);
-                        
-                        if (j >= 13 && j <= 16) || j>=29
-                            output((i-1)*32+j) = bitcmp(output((i-1)*32+j),'uint8');
-                        end
+                    symbol_index = j + 1;
+                    index = frame_index; % frame_index by default
+                    
+                    % Use delayed index on uneven frames
+                    if mod(j,2) == 1
+                        index = delayed_frame_index;
                     end
+  
+                    output(index+symbol_index) = input(frame_index+symbol_index);
+                        
+                    % The middle 4 symbols up until 28 and last 4
+                    % symbols need to be inverted
+                    if (j >= 12 && j <= 15) || j>=28
+                        output(index+symbol_index) = bitcmp(output(index+symbol_index),'uint8');
+                    end    
+
                 end
             end
             
@@ -476,15 +502,18 @@ classdef AudioCD
             % This will hold booleans for each symbol in all frames
             erasure_flags_out = zeros(n_frames*28,1,'logical');
             
-            for i = 1:n_frames
+            for i = 0:n_frames-1
                 
-                [dec_out,error] = step(obj.dec1,input((i-1)*32+1:i*32));%, zeros(32,1,'logical'));
+                frame_index = i*32;
+                new_frame_index = i*28;
+                
+                [dec_out,error] = step(obj.dec1,input(frame_index+1:frame_index+32));%, zeros(32,1,'logical'));
                 
                 % Adjust the flag for the symbol when erasure is detected
                 % This is according to algorithm 1 in the assignment
-                output((i-1)*28+1:i*28) = dec_out;
+                output(new_frame_index+1:new_frame_index+28) = dec_out;
                 if ~(error == 0 || error == 1)
-                    erasure_flags_out((i-1)*28+1:i*28) = 1;
+                    erasure_flags_out(new_frame_index+1:new_frame_index+28) = 1;
                 end
             end
         end
@@ -504,7 +533,6 @@ classdef AudioCD
             
             % Note: remove empty frames such that obj.CIRC_dec_delay_unequal(obj.CIRC_enc_delay_unequal(x)) == x!
             
-            
             % Similarly to the encoder, the symbols get delayed with
             % unequal delay. Now the first symbol gets the largest delay
             % whilst the last symbol gets no delay
@@ -516,12 +544,19 @@ classdef AudioCD
             erasure_flags_out = zeros((n_frames+27*4)*28,1,'logical');
             
             
-            for i=1:n_frames
+            for i=0:n_frames-1
+                
+                frame_index = i * 28;
+                
                 % Traverse symbols in each frame in reverse order to gain
                 % easy access to the corresponding delay
                 for j=27:-1:0
-                    output((i-1+j*4)*28+28-j) = input((i-1)*28+28-j);
-                    erasure_flags_out((i-1+j*4)*28+28-j) = erasure_flags_in((i-1)*28+28-j);
+                    
+                    delay = j*4*28;
+                    symbol_index = 28-j; %reverse order
+                    
+                    output(frame_index+delay+symbol_index) = input(frame_index+symbol_index);
+                    erasure_flags_out(frame_index+delay+symbol_index) = erasure_flags_in(frame_index+symbol_index);
                 end
             end
             
@@ -554,25 +589,29 @@ classdef AudioCD
             % prepare output and erasure flag buffers for use
             output = zeros(n_frames*24,1,'uint8');
             erasure_flags_out = zeros(n_frames*24,1,'logical');
+             
             
             
-            for i=1:n_frames
-                
+            for i=0:n_frames-1
+                  
+                frame_index = i*28;
+                new_frame_index = i*24;
+
                 % The parity symbols should now be in the middle of the
                 % frame, to be able to decode we need to put them at the
                 % end of the frame again.
                 frame = zeros(28,1,'uint8');
                 
-                frame(1:12) = input((i-1)*28+1:(i-1)*28+12);
-                frame(13:24) = input((i-1)*28+17:i*28);
-                frame(25:28) = input((i-1)*28+13:(i-1)*28+16);
+                frame(1:12) = input(frame_index+1:frame_index+12);
+                frame(13:24) = input(frame_index+17:frame_index+28);
+                frame(25:28) = input(frame_index+13:frame_index+16);
                 
                 % Do the same for the erasure buffers frame
                 erasure_frame = zeros(28,1,'logical');
                 
-                erasure_frame(1:12) = erasure_flags_in((i-1)*28+1:(i-1)*28+12);
-                erasure_frame(13:24) = erasure_flags_in((i-1)*28+17:i*28);
-                erasure_frame(25:28) = erasure_flags_in((i-1)*28+13:(i-1)*28+16);
+                erasure_frame(1:12) = erasure_flags_in(frame_index+1:frame_index+12);
+                erasure_frame(13:24) = erasure_flags_in(frame_index+17:frame_index+28);
+                erasure_frame(25:28) = erasure_flags_in(frame_index+13:frame_index+16);
                 
                 % The decoder will strip the 4 parity bits and try to
                 % correct errors. The output frame will be 24 symbols in
@@ -584,19 +623,19 @@ classdef AudioCD
                 % The amount of erasure flags at the input of c2
                 erasure_count = sum(erasure_frame(:)==1);
                 if error == 0 || error == 1
-                    output((i-1)*24+1:i*24) = dec_out;
+                    output(new_frame_index+1:new_frame_index+24) = dec_out;
                 else
                     if  erasure_count > 2
                         % probably not needed but maybe better result
-                        output((i-1)*24+1:i*24) = frame(1:24);
+                        output(new_frame_index+1:new_frame_index+24) = frame(1:24);
                         % Copy over the erasure flags from the input
-                        erasure_flags_out((i-1)*24+1:i*24) = erasure_frame(1:24);
+                        erasure_flags_out(new_frame_index+1:new_frame_index+24) = erasure_frame(1:24);
                     elseif erasure_count == 2 && error ~= -1
-                        output((i-1)*24+1:i*24) = dec_out;
+                        output(new_frame_index+1:new_frame_index+24) = dec_out;
                     else
-                        output((i-1)*24+1:i*24) = dec_out;
+                        output(new_frame_index+1:new_frame_index+24) = dec_out;
                         % Set all erasure flags to 1 for the current frame
-                        erasure_flags_out((i-1)*24+1:i*24) = 1;
+                        erasure_flags_out(new_frame_index+1:new_frame_index+24) = 1;
                     end
                 end
                 
@@ -625,53 +664,53 @@ classdef AudioCD
             erasure_flags_out = zeros((n_frames+2)*24,1,'logical');
             
             % add delay + do interleaving
-            for i=1:(n_frames)
+            for i=0:n_frames-1
+
+                frame_index = i*24;
+                delayed_frame_index = (i+2)*24;
                 
-                index = (i-1)*24;
-                delayedIndex = (i+1)*24;
-                
-                frame = input((i-1)*24+1:i*24);
-                erasure_frame = erasure_flags_in((i-1)*24+1:i*24);
+                frame = input(frame_index+1:frame_index+24);
+                erasure_frame = erasure_flags_in(frame_index+1:frame_index+24);
                 
                 % Now the uneven words need to get delayed by 2
                 
-                output(index+1:index+2) = frame(1:2); %L6n+0
-                erasure_flags_out(index+1:index+2) = erasure_frame(1:2);
+                output(frame_index+1:frame_index+2) = frame(1:2); %L6n+0
+                erasure_flags_out(frame_index+1:frame_index+2) = erasure_frame(1:2);
                 
-                output(index+3:index+4) = frame(7:8); %R6n+0
-                erasure_flags_out(index+3:index+4) = erasure_frame(7:8);
+                output(frame_index+3:frame_index+4) = frame(7:8); %R6n+0
+                erasure_flags_out(frame_index+3:frame_index+4) = erasure_frame(7:8);
                 
-                output(delayedIndex+5:delayedIndex+6) = frame(13:14); %L6n+1
-                erasure_flags_out(delayedIndex+5:delayedIndex+6) = erasure_frame(13:14);
+                output(delayed_frame_index+5:delayed_frame_index+6) = frame(13:14); %L6n+1
+                erasure_flags_out(delayed_frame_index+5:delayed_frame_index+6) = erasure_frame(13:14);
                 
-                output(delayedIndex+7:delayedIndex+8) = frame(19:20); %R6n+1
-                erasure_flags_out(delayedIndex+7:delayedIndex+8) = erasure_frame(19:20);
+                output(delayed_frame_index+7:delayed_frame_index+8) = frame(19:20); %R6n+1
+                erasure_flags_out(delayed_frame_index+7:delayed_frame_index+8) = erasure_frame(19:20);
                 
-                output(index+9:index+10) = frame(3:4); %L6n+2
-                erasure_flags_out(index+9:index+10) = erasure_frame(3:4);
+                output(frame_index+9:frame_index+10) = frame(3:4); %L6n+2
+                erasure_flags_out(frame_index+9:frame_index+10) = erasure_frame(3:4);
                 
-                output(index+11:index+12) = frame(9:10); %R6n+2
-                erasure_flags_out(index+11:index+12) = erasure_frame(9:10);
+                output(frame_index+11:frame_index+12) = frame(9:10); %R6n+2
+                erasure_flags_out(frame_index+11:frame_index+12) = erasure_frame(9:10);
                 
                 
                 
-                output(delayedIndex+13:delayedIndex+14) = frame(15:16); %L6n+3
-                erasure_flags_out(delayedIndex+13:delayedIndex+14) = erasure_frame(15:16);
+                output(delayed_frame_index+13:delayed_frame_index+14) = frame(15:16); %L6n+3
+                erasure_flags_out(delayed_frame_index+13:delayed_frame_index+14) = erasure_frame(15:16);
                 
-                output(delayedIndex+15:delayedIndex+16) = frame(21:22); %R6n+3
-                erasure_flags_out(delayedIndex+15:delayedIndex+16) = erasure_frame(21:22);
+                output(delayed_frame_index+15:delayed_frame_index+16) = frame(21:22); %R6n+3
+                erasure_flags_out(delayed_frame_index+15:delayed_frame_index+16) = erasure_frame(21:22);
                 
-                output(index+17:index+18) = frame(5:6); %L6n+4
-                erasure_flags_out(index+17:index+18) = erasure_frame(5:6);
+                output(frame_index+17:frame_index+18) = frame(5:6); %L6n+4
+                erasure_flags_out(frame_index+17:frame_index+18) = erasure_frame(5:6);
                 
-                output(index+19:index+20) = frame(11:12); %R6n+4
-                erasure_flags_out(index+19:index+20) = erasure_frame(11:12);
+                output(frame_index+19:frame_index+20) = frame(11:12); %R6n+4
+                erasure_flags_out(frame_index+19:frame_index+20) = erasure_frame(11:12);
                 
-                output(delayedIndex+21:delayedIndex+22) = frame(17:18); %L6n+5
-                erasure_flags_out(delayedIndex+21:delayedIndex+22) = erasure_frame(17:18);
+                output(delayed_frame_index+21:delayed_frame_index+22) = frame(17:18); %L6n+5
+                erasure_flags_out(delayed_frame_index+21:delayed_frame_index+22) = erasure_frame(17:18);
                 
-                output(delayedIndex+23:delayedIndex+24) = frame(23:24); %R6n+5
-                erasure_flags_out(delayedIndex+23:delayedIndex+24) = erasure_frame(23:24);
+                output(delayed_frame_index+23:delayed_frame_index+24) = frame(23:24); %R6n+5
+                erasure_flags_out(delayed_frame_index+23:delayed_frame_index+24) = erasure_frame(23:24);
                 
             end
             
@@ -790,6 +829,88 @@ classdef AudioCD
             fprintf('Number undetected errors: %d\n',sum(sum(out(interpolation_flags==0) ~= cd.scaled_quantized_padded_original(interpolation_flags==0))));
             
             sound(out,Fs);
+            
+        end
+        
+        function Q5_1()
+           
+            audio_file = audioread('Hallelujah.wav');
+            Fs = 44.1e3;
+            
+            burst = [100, 3000, 10000];
+            
+            n_erasures = zeros(4,3);
+            n_failed = zeros(4,3);
+            n_undetected = zeros(4,3);
+            
+            for configuration=0:3
+                for i=1:3
+                    
+                    fprintf('configuration %d\n',configuration);
+                    fprintf('burstlength %d\n',burst(i));
+                    
+                    cd = AudioCD(Fs,configuration,8);
+                    tic
+                    cd = cd.writeCd(audio_file);
+                    toc
+                    
+                    T_scratch = 600000; % Scratch at a diameter of approx. 66 mm
+                    for j = 1:floor(numel(cd.cd_bits)/T_scratch)
+                        cd = cd.scratchCd(burst(i),30000+(j-1)*T_scratch);
+                    end
+                    
+                    tic
+                    [out,interpolation_flags] = cd.readCd();
+                    toc
+                    
+                    n_erasures(configuration+1,i) = sum(sum(interpolation_flags~=0));
+                    n_failed(configuration+1,i) = sum(sum(interpolation_flags==-1));
+                    n_undetected(configuration+1,i) = sum(sum(out(interpolation_flags==0) ~= cd.scaled_quantized_padded_original(interpolation_flags==0)));
+                    
+                end
+            end
+            
+            n_erasures
+            n_failed
+            n_undetected
+            
+        end
+        
+        function Q5_2()
+            
+            audio_file = audioread('Hallelujah.wav');
+            Fs = 44.1e3;
+            
+            errorp = logspace(-1-log10(2),-3,10);
+            
+            n_erasures = zeros(3,10);
+            n_failed = zeros(3,10);
+            
+            for configuration=1:3
+                for i=1:10
+                    
+                    fprintf('configuration %d\n',configuration);
+                    fprintf('error probability %d\n',errorp(i));
+                    
+                    cd = AudioCD(Fs,configuration,8);
+                    tic
+                    cd = cd.writeCd(audio_file);
+                    toc
+                    
+                    cd = cd.bitErrorsCd(errorp(i));
+                    
+                    tic
+                    [out,interpolation_flags] = cd.readCd();
+                    toc
+                    
+                    n_erasures(configuration,i) = sum(sum(interpolation_flags~=0))/numel(interpolation_flags);
+                    n_failed(configuration,i) = sum(sum(interpolation_flags==-1))/numel(interpolation_flags);
+                    
+                end
+            end
+            
+            n_erasures
+            n_failed
             
         end
         
