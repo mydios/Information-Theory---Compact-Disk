@@ -47,11 +47,11 @@ classdef AudioCD
             if (configuration == 1) || (configuration == 2)
                 obj.gpoly2 = rsgenpoly(255,251,bi2de(fliplr(primpoly)),0);
                 obj.enc2 = comm.RSEncoder(255,251,obj.gpoly2,24,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);
-                obj.dec2 = comm.RSDecoder(255,251,obj.gpoly2,24,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);
+                obj.dec2 = comm.RSDecoder(255,251,obj.gpoly2,24,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly,'ErasuresInputPort',true);
                 
                 obj.gpoly1 = rsgenpoly(255,251,bi2de(fliplr(primpoly)),0);
                 obj.enc1 = comm.RSEncoder(255,251,obj.gpoly1,28,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);
-                obj.dec1 = comm.RSDecoder(255,251,obj.gpoly1,28,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);
+                obj.dec1 = comm.RSDecoder(255,251,obj.gpoly1,28,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly,'ErasuresInputPort',true);
             elseif configuration == 3
                 obj.gpoly_8_parity = rsgenpoly(255,247,bi2de(fliplr(primpoly)),0);
                 obj.enc_8_parity = comm.RSEncoder(255,247,obj.gpoly_8_parity,24,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);
@@ -507,7 +507,7 @@ classdef AudioCD
                 frame_index = i*32;
                 new_frame_index = i*28;
                 
-                [dec_out,error] = step(obj.dec1,input(frame_index+1:frame_index+32));%, zeros(32,1,'logical'));
+                [dec_out,error] = step(obj.dec1,input(frame_index+1:frame_index+32), zeros(32,1,'logical'));
                 
                 % Adjust the flag for the symbol when erasure is detected
                 % This is according to algorithm 1 in the assignment
@@ -613,35 +613,42 @@ classdef AudioCD
                 erasure_frame(13:24) = erasure_flags_in(frame_index+17:frame_index+28);
                 erasure_frame(25:28) = erasure_flags_in(frame_index+13:frame_index+16);
                 
-                % The decoder will strip the 4 parity bits and try to
-                % correct errors. The output frame will be 24 symbols in
-                % size
-                [dec_out, error] = step(obj.dec2,frame);%,erasure_frame);
-                
                 % Perform the C2 decoding according to the algorithm
                 % specified in the assignment
                 % The amount of erasure flags at the input of c2
                 erasure_count = sum(erasure_frame(:)==1);
-                if error == 0 || error == 1
-                    output(new_frame_index+1:new_frame_index+24) = dec_out;
-                else
-                    if  erasure_count > 2
-                        % probably not needed but maybe better result
-                        output(new_frame_index+1:new_frame_index+24) = frame(1:24);
-                        % Copy over the erasure flags from the input
-                        erasure_flags_out(new_frame_index+1:new_frame_index+24) = erasure_frame(1:24);
-                    elseif erasure_count == 2 && error ~= -1
+                
+                % Decoding can only be done when the amount of errors in a
+                % frame passed from c1 is less or equal than 2
+                if erasure_count <= 4
+                    
+                    % The decoder will strip the 4 parity bits and try to
+                    % correct errors. The output frame will be 24 symbols in
+                    % size
+                    [dec_out, error] = step(obj.dec2,frame,erasure_frame);
+                    
+                    if error == 0 || error == 1
                         output(new_frame_index+1:new_frame_index+24) = dec_out;
                     else
-                        output(new_frame_index+1:new_frame_index+24) = dec_out;
-                        % Set all erasure flags to 1 for the current frame
-                        erasure_flags_out(new_frame_index+1:new_frame_index+24) = 1;
+                        if erasure_count > 2
+                            erasure_flags_out(new_frame_index+1:new_frame_index+24) = erasure_frame(1:24);
+                        
+                        elseif erasure_count == 2 && error~=-1
+                            output(new_frame_index+1:new_frame_index+24) = dec_out;
+                        else 
+                            erasure_flags_out(new_frame_index+1:new_frame_index+24) = 1;
+                        end
                     end
-                end
                 
+                % in case there are more errors coming from c1 than the c2
+                % can handle, just update all erasures for the frame
+                else
+                    % probably not needed but maybe better result
+                    %output(new_frame_index+1:new_frame_index+24) = frame(1:24);
+                    % Copy over the erasure flags from the input
+                    erasure_flags_out(new_frame_index+1:new_frame_index+24) = 1;
+                end
             end
-            
-            
         end
         
         
