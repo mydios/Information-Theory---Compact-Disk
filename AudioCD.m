@@ -47,11 +47,11 @@ classdef AudioCD
             if (configuration == 1) || (configuration == 2)
                 obj.gpoly2 = rsgenpoly(255,251,bi2de(fliplr(primpoly)),0);
                 obj.enc2 = comm.RSEncoder(255,251,obj.gpoly2,24,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);
-                obj.dec2 = comm.RSDecoder(255,251,obj.gpoly2,24,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);%,'ErasuresInputPort',true);
+                obj.dec2 = comm.RSDecoder(255,251,obj.gpoly2,24,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);
                 
                 obj.gpoly1 = rsgenpoly(255,251,bi2de(fliplr(primpoly)),0);
                 obj.enc1 = comm.RSEncoder(255,251,obj.gpoly1,28,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);
-                obj.dec1 = comm.RSDecoder(255,251,obj.gpoly1,28,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);%,'ErasuresInputPort',true);
+                obj.dec1 = comm.RSDecoder(255,251,obj.gpoly1,28,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);
             elseif configuration == 3
                 obj.gpoly_8_parity = rsgenpoly(255,247,bi2de(fliplr(primpoly)),0);
                 obj.enc_8_parity = comm.RSEncoder(255,247,obj.gpoly_8_parity,24,'PrimitivePolynomialSource','Property','PrimitivePolynomial',primpoly);
