@@ -82,9 +82,7 @@ classdef RSCode
             temp = ext_code.x;
             alpha = gf(2,obj.m);
             
-            
-            aij = dftmtx(alpha);
-            aijinv = dftmtx(1/alpha);
+            aijinv = dftmtx(1/alpha); %make fourier kernel for 
             for i = 1:size(code,1)
                 
                 %find syndrome polynome
@@ -174,7 +172,7 @@ classdef RSCode
         function test()
             % Test the Matlab code of this class
             
-            m0 = 1; % Also test with other values of m0!
+            m0 = 0; % Also test with other values of m0!
             
             rs = RSCode(8,5,10,m0); % Construct the RSCode object
             
