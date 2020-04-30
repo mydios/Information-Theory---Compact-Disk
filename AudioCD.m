@@ -818,9 +818,7 @@ classdef AudioCD
             %Fs = 22.05e3;
             
             cd = AudioCD(Fs,1,8);
-            tic
             cd = cd.writeCd(audio_file);
-            toc
             
             T_scratch = 600000; % Scratch at a diameter of approx. 66 mm
             for i = 1:floor(numel(cd.cd_bits)/T_scratch)
@@ -844,42 +842,42 @@ classdef AudioCD
             audio_file = audioread('Hallelujah.wav');
             Fs = 44.1e3;
             
-            burst = [100, 3000, 10000];
+            widths = [100, 3000, 10000];
             
-            n_erasures = zeros(4,3);
-            n_failed = zeros(4,3);
-            n_undetected = zeros(4,3);
+            erasures = zeros(4,3);
+            failed_interpol = zeros(4,3);
+            undetected_errors = zeros(4,3);
             
             for configuration=0:3
                 for i=1:3
                     
-                    fprintf('configuration %d\n',configuration);
-                    fprintf('burstlength %d\n',burst(i));
+                    fprintf('config: %d, burst width: %d\n', configuration, widths(i));
                     
                     cd = AudioCD(Fs,configuration,8);
-                    tic
                     cd = cd.writeCd(audio_file);
-                    toc
-                    
-                    T_scratch = 600000; % Scratch at a diameter of approx. 66 mm
-                    for j = 1:floor(numel(cd.cd_bits)/T_scratch)
-                        cd = cd.scratchCd(burst(i),30000+(j-1)*T_scratch);
+                    % how many bits you need to jump over to get back to the same angle on the circular CD
+                    T_scratch = 600000;
+                    %amount of jumps
+                    n_steps = floor( numel(cd.cd_bits)/T_scratch );
+                    for j = 0:n_steps-1
+                        cd = cd.scratchCd(widths(i),30000+(j)*T_scratch);
                     end
                     
-                    tic
-                    [out,interpolation_flags] = cd.readCd();
-                    toc
+                    [out,flags] = cd.readCd();
                     
-                    n_erasures(configuration+1,i) = sum(sum(interpolation_flags~=0));
-                    n_failed(configuration+1,i) = sum(sum(interpolation_flags==-1));
-                    n_undetected(configuration+1,i) = sum(sum(out(interpolation_flags==0) ~= cd.scaled_quantized_padded_original(interpolation_flags==0)));
+                    %erasure, undetected error and failed interpolation probability for a
+                    %certain config and a certain error probability
+                    %flag is 0 for erasure and -1 for interpolation fail
+                    erasures(configuration+1,i) = sum(sum(flags ~= 0)) / numel(flags);
+                    failed_interpol(configuration+1,i) = sum(sum(flags == -1))/numel(flags);
+                    undetected_errors(configuration+1,i) = sum(sum(out(flags==0) ~= cd.scaled_quantized_padded_original(flags==0)))/numel(flags);
                     
                 end
             end
             
-            n_erasures
-            n_failed
-            n_undetected
+            erasures
+            failed_interpol
+            undetected_errors
             
         end
         
@@ -896,7 +894,7 @@ classdef AudioCD
             
             %keep track of the flagged erasures
             erasures = zeros(3,10);
-            
+            failed_interpol = zeros(3, 10);
             for configuration=1:3
                 for i=1:10
                     
@@ -905,19 +903,27 @@ classdef AudioCD
                     
                     cd = AudioCD(Fs,configuration,8);
                     cd = cd.writeCd(audio_file);
-                    
                     cd = cd.bitErrorsCd(errorlog(i));
                     
-                    [out,erasure_flags] = cd.readCd();
+                    [out,flags] = cd.readCd();
                     
-                    %
-                    erasures(configuration,i) = sum(sum(erasure_flags~=0))/numel(erasure_flags);
+                    %erasure and failed interpolation probability for a
+                    %certain config and a certain error probability
+                    %flag is 0 for erasure and -1 for interpolation fail
+                    erasures(configuration,i) = sum(sum(flags ~= 0)) / numel(flags);
+                    failed_interpol(configuration,i) = sum(sum(flags == -1))/numel(flags);
                     
                 end
             end
             errorlog
             erasures
+            failed_interpol
+            figure(1)
             semilogx(errorlog, erasures)
+            grid on
+            legend('config 1', 'config 2', 'config 3')
+            figure(2)
+            semilogx(errorlog, failed_interpol)
             grid on
             legend('config 1', 'config 2', 'config 3')
             
