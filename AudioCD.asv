@@ -613,8 +613,6 @@ classdef AudioCD
                 erasure_frame(13:24) = erasure_flags_in(frame_index+17:frame_index+28);
                 erasure_frame(25:28) = erasure_flags_in(frame_index+13:frame_index+16);
                 
-                
-                
                 % Perform the C2 decoding according to the algorithm
                 % specified in the assignment
                 % The amount of erasure flags at the input of c2
@@ -633,16 +631,13 @@ classdef AudioCD
                         output(new_frame_index+1:new_frame_index+24) = dec_out;
                     else
                         if erasure_count > 2
-                            erasure_flags_out(new_frame_index+1:new_frame_index+24) = frame(1:24);
+                            erasure_flags_out(new_frame_index+1:new_frame_index+24) = erasure_frame(1:24);
                         
+                        elseif erasure_count == 2 && error~=-1
+                            output(new_frame_index+1:new_frame_index+24) = dec_out;
+                        else 
+                            erasure_flags_out(new_frame_index+1:new_frame_index+24) = 1;
                         end
-                    
-                    
-                    
-                    
-                    if ~(erasure_count == 2 && error ~= -1)
-                        % Set all erasure flags to 1 for the current frame
-                        erasure_flags_out(new_frame_index+1:new_frame_index+24) = 1;
                     end
                 
                 % in case there are more errors coming from c1 than the c2
@@ -844,7 +839,7 @@ classdef AudioCD
             
         end
         
-        function Q5_1()
+        function test_scratchlengths()
            
             audio_file = audioread('Hallelujah.wav');
             Fs = 44.1e3;
@@ -888,41 +883,44 @@ classdef AudioCD
             
         end
         
-        function Q5_2()
+        
+            
+        
+        function test_biterrorrate()
             
             audio_file = audioread('Hallelujah.wav');
             Fs = 44.1e3;
+            %logspace(x, y, N) generates N samples logarithmic equally-spaced between
+            %10**x and 10**y 
+            errorlog = logspace(-1-log10(2),-3,10); %0.001 -> 0.05 
             
-            errorp = logspace(-1-log10(2),-3,10);
-            
-            n_erasures = zeros(3,10);
-            n_failed = zeros(3,10);
+            %keep track of the flagged erasures
+            erasures = zeros(3,10);
             
             for configuration=1:3
                 for i=1:10
                     
                     fprintf('configuration %d\n',configuration);
-                    fprintf('error probability %d\n',errorp(i));
+                    fprintf('error probability %d\n',errorlog(i));
                     
                     cd = AudioCD(Fs,configuration,8);
-                    tic
                     cd = cd.writeCd(audio_file);
-                    toc
                     
-                    cd = cd.bitErrorsCd(errorp(i));
+                    cd = cd.bitErrorsCd(errorlog(i));
                     
-                    tic
-                    [out,interpolation_flags] = cd.readCd();
-                    toc
+                    [out,erasure_flags] = cd.readCd();
                     
-                    n_erasures(configuration,i) = sum(sum(interpolation_flags~=0))/numel(interpolation_flags);
-                    n_failed(configuration,i) = sum(sum(interpolation_flags==-1))/numel(interpolation_flags);
+                    erasures(configuration,i) = sum(sum(erasure_flags~=0))/numel(erasure_flags);
                     
                 end
             end
-            
-            n_erasures
-            n_failed
+            errorlog
+            erasures
+            x = logspace(-1,2);
+            y1 = 10.^x;
+            y2 = 1./10.^x;
+            loglog(x,y1,x,y2)
+grid on
             
         end
         

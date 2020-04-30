@@ -1,0 +1,4 @@
+x = 0.
+semilogy(errorlog, erasures(1, :))
+grid on
+legend('config 1', 'config 2', 'config 3')

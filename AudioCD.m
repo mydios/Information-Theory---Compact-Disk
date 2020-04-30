@@ -839,7 +839,7 @@ classdef AudioCD
             
         end
         
-        function Q5_1()
+        function test_scratchlengths()
            
             audio_file = audioread('Hallelujah.wav');
             Fs = 44.1e3;
@@ -883,41 +883,43 @@ classdef AudioCD
             
         end
         
-        function Q5_2()
+        
+            
+        
+        function test_biterrorrate()
             
             audio_file = audioread('Hallelujah.wav');
             Fs = 44.1e3;
+            %logspace(x, y, N) generates N samples logarithmic equally-spaced between
+            %10**x and 10**y 
+            errorlog = logspace(-1-log10(2),-3,10); %0.001 -> 0.05 
             
-            errorp = logspace(-1-log10(2),-3,10);
-            
-            n_erasures = zeros(3,10);
-            n_failed = zeros(3,10);
+            %keep track of the flagged erasures
+            erasures = zeros(3,10);
             
             for configuration=1:3
                 for i=1:10
                     
                     fprintf('configuration %d\n',configuration);
-                    fprintf('error probability %d\n',errorp(i));
+                    fprintf('error probability %d\n',errorlog(i));
                     
                     cd = AudioCD(Fs,configuration,8);
-                    tic
                     cd = cd.writeCd(audio_file);
-                    toc
                     
-                    cd = cd.bitErrorsCd(errorp(i));
+                    cd = cd.bitErrorsCd(errorlog(i));
                     
-                    tic
-                    [out,interpolation_flags] = cd.readCd();
-                    toc
+                    [out,erasure_flags] = cd.readCd();
                     
-                    n_erasures(configuration,i) = sum(sum(interpolation_flags~=0))/numel(interpolation_flags);
-                    n_failed(configuration,i) = sum(sum(interpolation_flags==-1))/numel(interpolation_flags);
+                    %
+                    erasures(configuration,i) = sum(sum(erasure_flags~=0))/numel(erasure_flags);
                     
                 end
             end
-            
-            n_erasures
-            n_failed
+            errorlog
+            erasures
+            semilogx(errorlog, erasures)
+            grid on
+            legend('config 1', 'config 2', 'config 3')
             
         end
         
