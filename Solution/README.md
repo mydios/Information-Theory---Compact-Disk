@@ -1,2 +1,0 @@
-# informatietheorie
-project repo
